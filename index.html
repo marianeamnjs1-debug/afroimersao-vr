@@ -1,0 +1,225 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#130d18">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>AFROIMERSÃO VR</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#100b17;color:white;font-family:Arial,sans-serif}
+button{background:#d9ad65;color:#180e1a;border:0;border-radius:9px;padding:12px;font-weight:bold;font-size:14px}
+#inicio{position:fixed;inset:0;z-index:20;background:linear-gradient(140deg,#321c43,#0c0911);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:25px}
+h1{color:#e9bc76;font-size:clamp(27px,7vw,46px);letter-spacing:2px}
+#inicio p{max-width:450px;line-height:1.5}
+#controles{position:fixed;top:env(safe-area-inset-top,0px);left:0;right:0;z-index:10;text-align:center;padding:6px;background:#140e1ab8}
+#controles[hidden]{display:none}
+#nome{display:block;font-weight:bold;margin:4px}
+#informacao{position:fixed;bottom:env(safe-area-inset-bottom,8px);left:5%;width:90%;z-index:5;background:#170f1bdc;border:1px solid #c69b5c;padding:12px;border-radius:12px;text-align:center;font-size:13px;pointer-events:none}
+#informacao.vr{display:none}
+#museu{width:100vw;height:100dvh}
+canvas{display:block}
+</style>
+</head>
+<body>
+<div id="inicio">
+<h1>AFROIMERSÃO</h1>
+<p><strong>Museu Virtual Afro-Amapaense</strong></p>
+<p>Escola Estadual Dom Pedro I — Mazagão/AP</p>
+<p>Explore a ancestralidade, a arte e as manifestações culturais afro-brasileiras e afro-amapaenses.</p>
+<button onclick="entrar()">ENTRAR NA EXPOSIÇÃO</button>
+</div>
+
+<div id="controles" hidden>
+<span id="nome">Boas-vindas</span>
+<button onclick="anterior()">◀ Anterior</button>
+<button onclick="proxima()">Próxima ▶</button>
+<button onclick="ativarVR()">🥽 VR BOX</button>
+<button onclick="sair()">Sair</button>
+</div>
+
+<div id="museu"></div>
+<div id="informacao"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.1/three.min.js"></script>
+<script>
+const salas=[
+["Boas-vindas","Uma viagem pela arte, memória e identidade afro-brasileira."],
+["Ancestralidade","A ancestralidade preserva histórias, saberes e identidades."],
+["Marabaixo","Expressão cultural afro-amapaense marcada por música, dança e tradição."],
+["Batuque","Manifestação cultural afro-amapaense que reúne ritmo, memória e comunidade."],
+["Mazagão","Um espaço para conhecer a memória e o patrimônio cultural de Mazagão."]
+];
+
+let cena,camera,renderizador,grupo;
+let indice=0,vr=false,angulo=0,altura=0;
+
+function iniciar3D(){
+ if(typeof THREE==="undefined"){
+  alert("Não foi possível carregar o ambiente 3D. Verifique sua conexão com a internet.");
+  return;
+ }
+ cena=new THREE.Scene();
+ cena.background=new THREE.Color(0x130d18);
+ camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,.1,100);
+ camera.position.set(0,1.65,5);
+
+ renderizador=new THREE.WebGLRenderer({antialias:true});
+ renderizador.setPixelRatio(Math.min(devicePixelRatio,2));
+ renderizador.setSize(innerWidth,innerHeight);
+ document.getElementById("museu").appendChild(renderizador.domElement);
+
+ cena.add(new THREE.HemisphereLight(0xffffff,0x443322,2));
+ let luz=new THREE.PointLight(0xffcc88,65);
+ luz.position.set(0,4,0);
+ cena.add(luz);
+
+ grupo=new THREE.Group();
+ cena.add(grupo);
+ montarSala();
+
+ let tocou=false,x=0,y=0;
+ renderizador.domElement.addEventListener("touchstart",e=>{
+  tocou=true;
+  x=e.touches[0].clientX;
+  y=e.touches[0].clientY;
+ },{passive:true});
+
+ renderizador.domElement.addEventListener("touchmove",e=>{
+  if(!tocou)return;
+  let nx=e.touches[0].clientX;
+  let ny=e.touches[0].clientY;
+  angulo-=(nx-x)*.005;
+  altura=Math.max(-1.1,Math.min(1.1,altura-(ny-y)*.005));
+  x=nx;y=ny;
+ },{passive:true});
+
+ renderizador.domElement.addEventListener("touchend",()=>tocou=false);
+ window.addEventListener("resize",redimensionar);
+ animar();
+}
+
+function caixa(w,h,d,cor,x,y,z){
+ let objeto=new THREE.Mesh(
+  new THREE.BoxGeometry(w,h,d),
+  new THREE.MeshStandardMaterial({color:cor})
+ );
+ objeto.position.set(x,y,z);
+ grupo.add(objeto);
+ return objeto;
+}
+
+function montarSala(){
+ while(grupo.children.length){
+  let objeto=grupo.children[0];
+  grupo.remove(objeto);
+  if(objeto.geometry)objeto.geometry.dispose();
+  if(objeto.material)objeto.material.dispose();
+ }
+
+ const cores=[0x38244a,0x4a302b,0x633b4d,0x47342d,0x29464a];
+ caixa(12,.2,14,0x604734,0,-.1,0);
+ caixa(12,.2,14,0x302538,0,5,0);
+ caixa(12,5,.2,cores[indice],0,2.5,-7);
+ caixa(.2,5,14,cores[indice],-6,2.5,0);
+ caixa(.2,5,14,cores[indice],6,2.5,0);
+
+ for(let i=-1;i<=1;i++){
+  caixa(2.3,2.5,.12,0xb78a47,i*3.3,2.5,-6.83);
+  caixa(2.05,2.25,.14,[0x8b4e65,0xa77843,0x466b77][(i+1+indice)%3],i*3.3,2.5,-6.72);
+
+  let arte=new THREE.Mesh(
+   new THREE.TorusKnotGeometry(.55,.16,80,10),
+   new THREE.MeshStandardMaterial({color:0xe9c47a,metalness:.5,roughness:.3})
+  );
+  arte.position.set(i*3.3,2.5,-6.5);
+  grupo.add(arte);
+ }
+
+ caixa(2,.8,2,0x765743,0,.4,-2.5);
+ let escultura=new THREE.Mesh(
+  new THREE.IcosahedronGeometry(.8,1),
+  new THREE.MeshStandardMaterial({color:0xd7a86a,metalness:.65,roughness:.25})
+ );
+ escultura.position.set(0,1.5,-2.5);
+ grupo.add(escultura);
+
+ document.getElementById("nome").textContent=salas[indice][0];
+ document.getElementById("informacao").innerHTML=
+  "<b>"+salas[indice][0]+"</b><p>"+salas[indice][1]+"</p>";
+}
+
+function animar(){
+ requestAnimationFrame(animar);
+ camera.rotation.order="YXZ";
+ camera.rotation.y=angulo;
+ camera.rotation.x=altura;
+
+ if(vr){
+  renderizador.setScissorTest(true);
+  let w=innerWidth/2,h=innerHeight;
+  camera.aspect=w/h;
+  camera.updateProjectionMatrix();
+
+  for(let olho=0;olho<2;olho++){
+   renderizador.setViewport(olho*w,0,w,h);
+   renderizador.setScissor(olho*w,0,w,h);
+   renderizador.render(cena,camera);
+  }
+  renderizador.setScissorTest(false);
+ }else{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderizador.setViewport(0,0,innerWidth,innerHeight);
+  renderizador.render(cena,camera);
+ }
+}
+
+function entrar(){
+ if(!renderizador){
+  try{iniciar3D()}
+  catch(e){
+   alert("Erro ao iniciar o museu 3D: "+e.message);
+   return;
+  }
+  if(!renderizador)return;
+ }
+ document.getElementById("inicio").style.display="none";
+ document.getElementById("controles").hidden=false;
+}
+
+function proxima(){
+ indice=(indice+1)%salas.length;
+ montarSala();
+}
+function anterior(){
+ indice=(indice+salas.length-1)%salas.length;
+ montarSala();
+}
+function ativarVR(){
+ vr=!vr;
+ document.getElementById("informacao").classList.toggle("vr",vr);
+ if(vr){
+  if(document.documentElement.requestFullscreen){
+   document.documentElement.requestFullscreen().catch(()=>{});
+  }
+ }
+}
+function sair(){
+ vr=false;
+ document.getElementById("inicio").style.display="flex";
+ document.getElementById("controles").hidden=true;
+ document.getElementById("informacao").classList.remove("vr");
+}
+function redimensionar(){
+ if(!renderizador)return;
+ renderizador.setSize(innerWidth,innerHeight);
+ camera.aspect=innerWidth/innerHeight;
+ camera.updateProjectionMatrix();
+}
+</script>
+</body>
+</html>
